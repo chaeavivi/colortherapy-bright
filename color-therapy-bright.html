@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>컬러테라피, 나의 마음 읽기</title>
+  <style>
+    :root {
+      --gap: 14px;
+      --radius: 16px;
+      --bg: #f8f9fc;
+      --text: #2d3748;
+      --muted: #718096;
+      --shadow: 0 10px 30px rgba(0,0,0,.1);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: "Pretendard", system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif;
+      background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+      min-height: 100vh;
+      color: var(--text);
+      display: grid; place-items: center;
+    }
+    
+    /* 결과 페이지일 때 배경 변경 */
+    body.result-page {
+      background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    }
+    .container { width: min(960px, 92vw); margin: 6vh auto; text-align: center; }
+    h1 { font-size: clamp(20px, 3.2vw, 32px); margin: 0 0 20px; text-align: center; color: #2d3748; }
+    p  { color: #4a5568; margin: 0 0 24px; text-align: center; }
+
+    /* View states */
+    .view { display: none; }
+    .view.active { display: block; }
+    
+    /* 결과 페이지 제목 스타일 */
+    #view-result h1 {
+      color: #2d3748;
+      margin-bottom: 30px;
+    }
+
+    /* Color Picker Container */
+    .color-picker-container {
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 24px;
+      padding: 40px 32px;
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      margin-top: 32px;
+      position: relative;
+    }
+    
+    .color-picker-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 100%);
+      border-radius: 24px;
+      pointer-events: none;
+    }
+
+    /* Picker */
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); max-width: 360px; margin: 0 auto; }
+    .chip {
+      position: relative; 
+      border-radius: 50%; 
+      width: 100px; 
+      height: 100px; 
+      cursor: pointer; 
+      overflow: hidden;
+      border: 3px solid rgba(255,255,255,.8); 
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255,255,255,.3);
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+      margin: 0 auto;
+      backdrop-filter: blur(10px);
+    }
+    .chip:focus-visible { outline: 3px solid #4299e1; outline-offset: 4px; }
+    .chip:hover { 
+      transform: translateY(-4px) scale(1.05); 
+      box-shadow: 
+        0 15px 40px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255,255,255,.5);
+      border: 3px solid rgba(255,255,255,.9);
+    }
+    .chip:active {
+      transform: translateY(-2px) scale(1.02);
+    }
+    .chip span {
+      position: absolute; 
+      top: 50%; 
+      left: 50%; 
+      transform: translate(-50%, -50%);
+      font-weight: 700; 
+      color: rgba(255,255,255,.95);
+      text-shadow: 0 2px 8px rgba(0,0,0,.6);
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    /* Loading */
+    .loading {
+      height: 65vh; border-radius: calc(var(--radius) + 4px); display: grid; place-items: center; position: relative;
+      overflow: hidden;
+    }
+    .spinner { width: 64px; height: 64px; border-radius: 50%; border: 6px solid rgba(255,255,255,.4); border-top-color: #fff; animation: spin 1s linear infinite; }
+    .loading-label { position: absolute; bottom: 24px; left: 24px; right: 24px; display: flex; justify-content: space-between; color: rgba(255,255,255,.95); font-weight: 600; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Result */
+    .result { display: grid; gap: 14px; padding: 0 20px; }
+    .result .card { 
+      background: rgba(255, 255, 255, 0.85); 
+      border: 1px solid rgba(255, 255, 255, 0.6); 
+      border-radius: 24px; 
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      overflow: hidden; 
+      position: relative;
+      max-width: 540px;
+      margin: 0 auto;
+      padding: 20px 20px 0 20px;
+    }
+    .result .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+      border-radius: 24px;
+      pointer-events: none;
+    }
+    .result img { 
+      display: block; 
+      width: 100%; 
+      max-width: 500px;
+      aspect-ratio: 1 / 1;
+      object-fit: cover; 
+      object-position: center;
+      border-radius: 20px;
+      margin: 20px auto;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    /* 메시지 카드 스타일 */
+    .message-card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 16px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      position: relative;
+      z-index: 1;
+      transition: all 0.3s ease;
+    }
+    
+    /* 책갈피 디자인 스타일 */
+    .bookmark-icon {
+      position: absolute;
+      top: -15px;
+      right: 15px;
+      width: 30px;
+      height: 45px;
+      z-index: 3;
+      animation: fadeIn 0.5s ease-in-out 0.3s both;
+    }
+    
+    .bookmark-icon::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #666;
+      clip-path: polygon(0 0, 100% 0, 100% 85%, 50% 70%, 0 85%);
+      border-radius: 3px 3px 0 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    
+    /* 컬러별 북마크 색상 */
+    .bookmark-icon.red::before { background: linear-gradient(135deg, #fd0100, #ff4444); }
+    .bookmark-icon.orange::before { background: linear-gradient(135deg, #ff9900, #ffbb33); }
+    .bookmark-icon.yellow::before { background: linear-gradient(135deg, #ffde59, #fff082); }
+    .bookmark-icon.green::before { background: linear-gradient(135deg, #00b050, #33cc66); }
+    .bookmark-icon.cyan::before { background: linear-gradient(135deg, #38b6ff, #66ccff); }
+    .bookmark-icon.navy::before { background: linear-gradient(135deg, #0b0b92, #3333bb); }
+    .bookmark-icon.purple::before { background: linear-gradient(135deg, #631da2, #8844cc); }
+    .bookmark-icon.magenta::before { background: linear-gradient(135deg, #ff009d, #ff44bb); }
+    .bookmark-icon.pink::before { background: linear-gradient(135deg, #ff8fb3, #ffb3d6); }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* 컬러별 메시지 카드 테마 */
+    .message-card.red { 
+      background: linear-gradient(135deg, rgba(253, 1, 0, 0.1), rgba(255, 68, 68, 0.1));
+      border-left: 4px solid #fd0100;
+    }
+    .message-card.orange { 
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.1), rgba(255, 187, 51, 0.1));
+      border-left: 4px solid #ff9900;
+    }
+    .message-card.yellow { 
+      background: linear-gradient(135deg, rgba(255, 222, 89, 0.1), rgba(255, 240, 130, 0.1));
+      border-left: 4px solid #ffde59;
+    }
+    .message-card.green { 
+      background: linear-gradient(135deg, rgba(0, 176, 80, 0.1), rgba(51, 204, 102, 0.1));
+      border-left: 4px solid #00b050;
+    }
+    .message-card.cyan { 
+      background: linear-gradient(135deg, rgba(56, 182, 255, 0.1), rgba(102, 204, 255, 0.1));
+      border-left: 4px solid #38b6ff;
+    }
+    .message-card.navy { 
+      background: linear-gradient(135deg, rgba(11, 11, 146, 0.1), rgba(51, 51, 187, 0.1));
+      border-left: 4px solid #0b0b92;
+    }
+    .message-card.purple { 
+      background: linear-gradient(135deg, rgba(99, 29, 162, 0.1), rgba(136, 68, 204, 0.1));
+      border-left: 4px solid #631da2;
+    }
+    .message-card.magenta { 
+      background: linear-gradient(135deg, rgba(255, 0, 157, 0.1), rgba(255, 68, 187, 0.1));
+      border-left: 4px solid #ff009d;
+    }
+    .message-card.pink { 
+      background: linear-gradient(135deg, rgba(255, 143, 179, 0.1), rgba(255, 179, 214, 0.1));
+      border-left: 4px solid #ff8fb3;
+    }
+    
+    .message-text {
+      font-size: 18px;
+      font-weight: 600;
+      color: #2d3748;
+      line-height: 1.6;
+      text-align: center;
+      margin: 0;
+      padding-right: 40px; /* 북마크 공간 확보 */
+    }
+    
+    .toolbar { 
+      display: flex; 
+      gap: 10px; 
+      align-items: center; 
+      justify-content: center; 
+      padding: 16px 24px 20px 24px; 
+      color: #2d3748;
+      position: relative;
+      z-index: 1;
+    }
+    .pill { 
+      padding: 8px 16px; 
+      border-radius: 999px; 
+      background: rgba(255,255,255,.8); 
+      color: #2d3748; 
+      font-weight: 600; 
+      font-size: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      backdrop-filter: blur(10px);
+    }
+    .btn { 
+      appearance: none; 
+      border: none; 
+      padding: 10px 16px; 
+      border-radius: 12px; 
+      font-weight: 700; 
+      cursor: pointer;
+      background: rgba(255,255,255,.8);
+      color: #2d3748;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+    .btn:hover {
+      background: rgba(255,255,255,.95);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .btn.secondary { 
+      background: rgba(255,255,255,.8); 
+      color: #2d3748;
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 520px) {
+      .color-picker-container { padding: 24px 20px; margin-top: 20px; }
+      .grid { max-width: 280px; }
+      .chip { width: 80px; height: 80px; }
+      .chip span { font-size: 10px; }
+      .loading { height: 56vh; }
+      .result img { max-width: 350px; }
+      .message-text { font-size: 16px; }
+    }
+    
+    @media (max-width: 390px) {
+      .result img { max-width: 280px; }
+    }
+    
+    @media (min-width: 768px) {
+      .result img { max-width: 450px; }
+    }
+    
+    @media (min-width: 1024px) {
+      .result img { max-width: 500px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <!-- View 1: Color Picker -->
+    <section id="view-picker" class="view active" aria-labelledby="picker-title">
+      <h1 id="picker-title">당신을 위한 컬러 힐링 메시지</h1>
+      <p>직감적으로 나에게 필요한 컬러를 선택해주세요.<br>오늘의 당신을 응원합니다.</p>
+      
+      <div class="color-picker-container">
+        <div class="grid" role="list">
+          <!-- 3x3 배열: 9가지 컬러 -->
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #fd0100, #ff4444)" data-color-name="Red" data-key="red" data-image="images/red.jpg" aria-label="Red – 레드"><span>Red<br>(레드)</span></button>
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #ff9900, #ffbb33)" data-color-name="Orange" data-key="orange" data-image="images/orange.jpg" aria-label="Orange – 오렌지"><span>Orange<br>(오렌지)</span></button>
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #ffde59, #fff082)" data-color-name="Yellow" data-key="yellow" data-image="images/yellow.jpg" aria-label="Yellow – 옐로우"><span>Yellow<br>(옐로우)</span></button>
+          
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #00b050, #33cc66)" data-color-name="Green" data-key="green" data-image="images/green.jpg" aria-label="Green – 그린"><span>Green<br>(그린)</span></button>
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #38b6ff, #66ccff)" data-color-name="Cyan" data-key="cyan" data-image="images/cyan.jpg" aria-label="Cyan – 시안"><span>Cyan<br>(시안)</span></button>
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #0b0b92, #3333bb)" data-color-name="Navy" data-key="navy" data-image="images/navy.jpg" aria-label="Navy – 네이비"><span>Navy<br>(네이비)</span></button>
+          
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #631da2, #8844cc)" data-color-name="Purple" data-key="purple" data-image="images/purple.jpg" aria-label="Purple – 퍼플"><span>Purple<br>(퍼플)</span></button>
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #ff009d, #ff44bb)" data-color-name="Magenta" data-key="magenta" data-image="images/magenta.jpg" aria-label="Magenta – 마젠타"><span>Magenta<br>(마젠타)</span></button>
+          <button class="chip" role="listitem" style="background:linear-gradient(135deg, #ff8fb3, #ffb3d6)" data-color-name="Pink" data-key="pink" data-image="images/pink.jpg" aria-label="Pink – 핑크"><span>Pink<br>(핑크)</span></button>
+        </div>
+        
+        <!-- 메인 페이지 홈 버튼 추가 -->
+        <div style="margin-top: 30px; text-align: center;">
+          <button class="btn secondary" id="btnMainHome">홈으로 가기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 2: Fullscreen Loading with selected color -->
+    <section id="view-loading" class="view" aria-live="polite" aria-busy="true">
+      <div id="loadingBox" class="loading" style="background:#111;">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="loading-label"><span id="loadingColor">Color</span><span>선택하기…</span></div>
+      </div>
+    </section>
+
+    <!-- View 3: Result Image -->
+    <section id="view-result" class="view" aria-labelledby="result-title">
+      <h1 id="result-title">레드로 응원해요 ❤️</h1>
+      <div class="result">
+        <div class="card">
+          <!-- 메시지 카드 추가 -->
+          <div class="message-card">
+            <div class="bookmark-icon"></div>
+            <p class="message-text" id="messageText">당신을 위한 메시지입니다.</p>
+          </div>
+          
+          <div class="toolbar">
+            <div style="display:flex; gap:8px;">
+              <button class="btn secondary" id="btnBack">홈으로 가기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ===== Simple state machine (picker → loading → result) =====
+    const views = {
+      picker: document.getElementById('view-picker'),
+      loading: document.getElementById('view-loading'),
+      result: document.getElementById('view-result'),
+    };
+    const loadingBox   = document.getElementById('loadingBox');
+    const loadingColor = document.getElementById('loadingColor');
+    const messageText  = document.getElementById('messageText');
+    const messageCard  = document.querySelector('.message-card');
+    const bookmarkIcon = document.querySelector('.bookmark-icon');
+    const btnBack      = document.getElementById('btnBack');
+    const btnMainHome  = document.getElementById('btnMainHome');
+
+    const LOADING_MS = 1400; // 로딩 유지 시간 (ms)
+
+    // 컬러별 메시지 배열
+    const colorMessages = {
+      red: [
+        "생각을 현실로 만들자",
+        "지금 행동하자",
+        "현실에 집중해 기회를 잡자",
+        "에너지를 다시 채우자",
+        "지금 이 순간을 살자",
+        "나의 꿈은 이루어지길",
+        "한 걸음부터 시작하자",
+        "떠오른 생각, 바로 해보자",
+        "열정으로 하루를 열자",
+        "목표를 향해 나아가자",
+        "뭐든 해낼 수 있길",
+        "용기를 내서 나아가자",
+        "강한 의지로 이겨내자",
+        "불타는 마음으로 도전하자",
+        "내 안의 힘을 믿자",
+        "멈추지 말고 전진하자",
+        "실패를 두려워하지 말자",
+        "오늘의 선택을 믿자",
+        "스스로를 격려하자",
+        "매일 조금씩 나아가자",
+        "도전하는 내가 되자",
+        "열정을 행동으로 바꾸자",
+        "포기하지 말자",
+        "기회는 준비된 자의 것",
+        "다시 일어서자",
+        "불안보다 용기를 택하자",
+        "내 목표는 가능하다",
+        "오늘도 최선을 다하자",
+        "나의 불씨를 키우자",
+        "나는 결국 해낸다"
+      ],
+      orange: [
+        "충동 대신 여유를 가지자",
+        "오늘은 계획적으로 움직이자",
+        "용감한 나를 믿자",
+        "인생을 맘껏 즐기자",
+        "피할 수 없다면 웃으며 하자",
+        "설레는 하루가 되길",
+        "창의적인 하루가 되길",
+        "새로운 도전을 시작하자",
+        "따뜻한 마음으로 만나자",
+        "긍정 에너지로 채우자",
+        "변화를 반갑게 맞이하자",
+        "잃었던 열정을 되찾자",
+        "열린 마음으로 소통하자",
+        "모험을 즐기자",
+        "즐거운 순간을 만들자",
+        "작은 일에도 웃자",
+        "일상 속 행복을 찾자",
+        "가볍게 나아가자",
+        "마음의 문을 열자",
+        "호기심을 따라가자",
+        "자신감 있게 표현하자",
+        "나다운 리듬을 찾자",
+        "자유롭게 흘러가자",
+        "매일 새로운 설렘을 느끼자",
+        "내 안의 빛을 꺼내자",
+        "변화를 즐기자",
+        "내일보다 오늘을 즐기자",
+        "밝은 기운으로 웃자",
+        "내가 행복의 주인공이 되자",
+        "삶을 유쾌하게 살아가자"
+      ],
+      yellow: [
+        "내 선택을 믿자",
+        "긍정적으로 세상을 바라보자",
+        "배움을 나누자",
+        "세상의 빛이 되자",
+        "내 안의 순수를 사랑하자",
+        "웃는 얼굴로 하루를 시작하자",
+        "밝은 미래가 오길",
+        "지혜로운 선택을 하자",
+        "새로운 배움을 즐기자",
+        "희망으로 하루를 열자",
+        "자신감을 가지자",
+        "행복한 순간을 만들자",
+        "긍정의 힘을 믿자",
+        "밝은 에너지로 비추자",
+        "웃음이 행운을 부른다",
+        "내 생각을 따뜻하게 바꾸자",
+        "유쾌하게 하루를 맞이하자",
+        "호기심을 잃지 말자",
+        "세상을 밝히자",
+        "기분 좋은 하루가 되길",
+        "즐겁게 배워가자",
+        "자신을 칭찬하자",
+        "행복은 지금 여기에 있다",
+        "웃음으로 빛나자",
+        "좋은 일이 생기길",
+        "작은 기쁨을 놓치지 말자",
+        "마음의 해를 비추자",
+        "내 안의 해를 깨우자",
+        "희망을 심자",
+        "오늘은 환하게 웃자"
+      ],
+      green: [
+        "나의 속도를 믿자",
+        "새로운 눈으로 세상을 보자",
+        "소중한 관계에 감사하자",
+        "진짜 나를 믿자",
+        "인생의 즐거움을 찾자",
+        "새로운 시작을 응원하자",
+        "마음의 평화를 되찾자",
+        "자연처럼 숨 쉬자",
+        "성장의 기회를 잡자",
+        "균형 잡힌 하루가 되길",
+        "안정 속에서 새로움을 보자",
+        "오늘은 나를 치유하자",
+        "조화로운 관계를 만들자",
+        "자연의 흐름에 맡기자",
+        "내가 나의 안식처가 되자",
+        "평온을 선택하자",
+        "다투지 말고 이해하자",
+        "여유로운 마음을 가지자",
+        "나를 믿고 기다리자",
+        "회복의 시간을 가지자",
+        "초록빛 쉼을 누리자",
+        "마음을 정돈하자",
+        "있는 그대로의 나를 사랑하자",
+        "서로를 따뜻하게 바라보자",
+        "편안한 하루가 되길",
+        "치유의 시간이 오길",
+        "평화로운 에너지를 품자",
+        "자연처럼 단단해지자",
+        "안정감 속에서 웃자",
+        "마음의 뿌리를 단단히 하자"
+      ],
+      cyan: [
+        "인생의 도약을 하자",
+        "변화를 두려워하지 말자",
+        "도전하는 내가 되길",
+        "진심으로 소통하자",
+        "세상이 나를 주목하길",
+        "좋은 말로 세상을 물들이자",
+        "맑은 마음으로 시작하자",
+        "표현하는 하루가 되길",
+        "시원한 변화가 오길",
+        "진실한 나로 살자",
+        "새로운 관점을 가지자",
+        "깨끗한 에너지로 비워내자",
+        "자유롭게 날아오르자",
+        "가능성의 문이 열리길",
+        "내 이야기를 전하자",
+        "소통으로 마음을 잇자",
+        "듣는 힘을 키우자",
+        "나의 진심을 보여주자",
+        "말로 따뜻함을 전하자",
+        "솔직하게 표현하자",
+        "마음의 창을 열자",
+        "용기 있게 말하자",
+        "내가 말하는 대로 이루어지길",
+        "투명한 마음을 지키자",
+        "내 목소리를 믿자",
+        "새로운 흐름을 받아들이자",
+        "지금의 나로 충분하자",
+        "마음을 가볍게 하자",
+        "시원한 바람처럼 살자",
+        "진심이 통하길"
+      ],
+      navy: [
+        "생각의 소용돌이에서 벗어나자",
+        "지금 이 순간에 집중하자",
+        "융통성을 발휘하자",
+        "세상 속으로 나가자",
+        "내 생각을 선택하자",
+        "두려움보다 가능성을 보자",
+        "깊이 있는 통찰을 하자",
+        "믿을 수 있는 관계를 만들자",
+        "차분히 집중하자",
+        "현명한 판단을 하자",
+        "안정감 있는 하루가 되길",
+        "진정한 가치를 발견하자",
+        "깊은 성찰의 시간이 되길",
+        "내면의 지혜를 믿자",
+        "고요 속에서 답을 찾자",
+        "흔들리지 말자",
+        "나의 기준을 세우자",
+        "생각을 정리하자",
+        "집중의 힘을 믿자",
+        "느리게 가도 괜찮다",
+        "꾸준함을 선택하자",
+        "명확하게 보자",
+        "깊게 이해하자",
+        "신뢰를 쌓자",
+        "나의 중심을 지키자",
+        "판단보다 이해하자",
+        "차분한 하루가 되길",
+        "내면의 평화를 찾자",
+        "깊이 있는 하루를 살자",
+        "진실하게 바라보자"
+      ],
+      purple: [
+        "나의 재능을 키우자",
+        "나만의 색으로 살자",
+        "직감을 믿자",
+        "나를 아끼자",
+        "내 선택은 옳다",
+        "존재만으로 빛나길",
+        "감각을 따라가보자",
+        "영감이 넘치길",
+        "신비로운 경험을 받아들이자",
+        "내면의 목소리를 듣자",
+        "예술적 감성을 피워내자",
+        "꿈과 현실의 균형을 맞추자",
+        "독창적인 아이디어가 떠오르길",
+        "나의 재능을 세상에 보여주자",
+        "창의력의 문을 열자",
+        "내 안의 예술가를 깨우자",
+        "상상으로 미래를 그리자",
+        "나의 가능성을 믿자",
+        "영감의 불빛을 키우자",
+        "나를 표현하자",
+        "특별함을 두려워하지 말자",
+        "유연하게 흘러가자",
+        "자유롭게 창조하자",
+        "내면의 소리를 따르자",
+        "감정으로 그리자",
+        "나의 세계를 펼치자",
+        "창조의 즐거움을 느끼자",
+        "예술처럼 살아가자",
+        "빛나는 아이디어가 피어나길",
+        "나의 길을 믿자"
+      ],
+      magenta: [
+        "나의 에너지를 세상에 전하자",
+        "성숙한 나로 나아가자",
+        "노력한 나에게 박수 치자",
+        "감사로 하루를 채우자",
+        "오늘도 행운이 함께하길",
+        "열정을 깨우자",
+        "과감히 도전하자",
+        "사랑과 에너지가 넘치길",
+        "매력을 드러내자",
+        "감정을 솔직히 표현하자",
+        "변화는 나를 성장시킨다",
+        "나의 색으로 세상을 물들이자",
+        "카리스마가 빛나길",
+        "오늘의 나를 사랑하자",
+        "풍요로움이 흐르길",
+        "마음의 여유를 가지자",
+        "자신을 칭찬하자",
+        "따뜻함을 나누자",
+        "나의 시간을 소중히 하자",
+        "존재에 감사하자",
+        "풍성한 사랑을 받자",
+        "새로운 기회가 열리길",
+        "내 안의 아름다움을 보자",
+        "자신감 있게 나아가자",
+        "풍요로운 에너지를 만들자",
+        "사랑으로 충만하자",
+        "우아하게 나를 지키자",
+        "자신을 포용하자",
+        "오늘의 빛을 즐기자",
+        "감사로 마무리하자"
+      ],
+      pink: [
+        "나는 소중한 존재야",
+        "오늘도 나를 사랑하자",
+        "있는 그대로의 나를 받아들이자",
+        "다정한 말을 건네자",
+        "편안한 마음을 선택하자",
+        "나를 아끼는 하루가 되길",
+        "마음을 열자",
+        "사랑으로 하루를 채우자",
+        "부드럽게 감싸주자",
+        "나를 사랑하는 시간으로 채우자",
+        "달콤한 휴식이 되길",
+        "온화한 에너지가 머물길",
+        "감사로 하루를 마무리하자",
+        "순수한 마음으로 새로 시작하자",
+        "오늘은 나에게 다정하자",
+        "내 마음을 포근히 안아주자",
+        "따뜻한 눈빛을 나누자",
+        "사랑받을 가치가 있음을 믿자",
+        "자신에게 미소 짓자",
+        "부드러운 말로 나를 위로하자",
+        "포근한 하루가 되길",
+        "내 안의 평화를 느끼자",
+        "사랑으로 충만하자",
+        "나의 존재를 축하하자",
+        "다정함으로 세상을 감싸자",
+        "감사의 마음을 전하자",
+        "따뜻한 관계를 만들자",
+        "사랑이 머무는 공간이 되자",
+        "부드러운 마음을 잃지 말자",
+        "오늘은 사랑으로 빛나자"
+      ]
+    };
+
+    // 컬러별 제목과 이모지
+    const colorTitles = {
+      red: "레드로 응원해요 ❤️",
+      orange: "오렌지로 응원해요 🧡", 
+      yellow: "옐로우로 응원해요 💛",
+      green: "그린으로 응원해요 💚",
+      cyan: "시안으로 응원해요 💙",
+      navy: "네이비로 응원해요 💙",
+      purple: "퍼플로 응원해요 💜",
+      magenta: "마젠타로 응원해요 💖",
+      pink: "핑크로 응원해요 💗"
+    };
+
+    function show(name){
+      Object.values(views).forEach(v => v.classList.remove('active'));
+      views[name].classList.add('active');
+      
+      // 결과 페이지일 때 body 배경 변경
+      if(name === 'result') {
+        document.body.classList.add('result-page');
+      } else {
+        document.body.classList.remove('result-page');
+      }
+    }
+
+    function getRandomMessage(colorKey) {
+      const messages = colorMessages[colorKey] || colorMessages.red;
+      const randomIndex = Math.floor(Math.random() * messages.length);
+      return messages[randomIndex];
+    }
+
+    function onSelectColor(el){
+      const colorKey  = el.dataset.key;
+      const colorName = el.dataset.colorName || colorKey;
+      
+      const bg = getComputedStyle(el).backgroundColor;
+
+      // 1) Loading view with the SAME color background
+      loadingBox.style.background = bg;
+      loadingColor.textContent = `${colorName}`;
+      show('loading');
+
+      // 2) After delay, show the result
+      setTimeout(() => {
+        // 제목 업데이트
+        const resultTitle = document.getElementById('result-title');
+        resultTitle.textContent = colorTitles[colorKey] || `${colorName}로 응원해요 ❤️`;
+        
+        // 랜덤 메시지 설정
+        messageText.textContent = getRandomMessage(colorKey);
+        
+        // 메시지 카드에 컬러 테마 적용
+        messageCard.className = `message-card ${colorKey}`;
+        
+        // 북마크 아이콘에 컬러 테마 적용
+        bookmarkIcon.className = `bookmark-icon ${colorKey}`;
+        
+        show('result');
+      }, LOADING_MS);
+    }
+
+    // Wire chips
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => onSelectColor(chip));
+      chip.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); onSelectColor(chip); }
+      });
+      chip.setAttribute('tabindex', '0');
+    });
+
+    // Back to picker
+    btnBack?.addEventListener('click', () => {
+      show('picker');
+    });
+
+    // Main home button
+    btnMainHome?.addEventListener('click', () => {
+      // 지정된 홈 주소로 이동
+      window.location.href = 'https://claude.ai/public/artifacts/8de04532-c953-4c5c-b8fd-e7573a195f44';
+    });
+
+    // 페이지 로드 완료
+    window.addEventListener('load', () => {
+      console.log('Color test page loaded');
+    });
+  </script>
+</body>
+</html>
